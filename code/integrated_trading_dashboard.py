@@ -17,6 +17,15 @@ from scipy.stats import norm
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import real India VIX fetcher
+try:
+    from fetch_india_vix import IndiaVIXFetcher
+    VIX_FETCHER = IndiaVIXFetcher()
+    USE_REAL_VIX = True
+except:
+    USE_REAL_VIX = False
+    print("Warning: Could not load India VIX fetcher, using fallback")
+
 # Page config
 st.set_page_config(
     page_title="Live Trading Dashboard - Groww Ready",
@@ -165,16 +174,30 @@ class IntegratedTradingSystem:
                     'timestamp': datetime.now().strftime("%H:%M:%S")
                 }
 
-            # Fetch VIX
-            url_vix = "https://query1.finance.yahoo.com/v8/finance/chart/%5EINVIX"
-            response_vix = requests.get(url_vix, params={'interval': '1d', 'range': '5d'}, headers=headers, timeout=10)
-
-            if response_vix.status_code == 200:
-                data_vix = response_vix.json()
-                vix_price = data_vix['chart']['result'][0]['meta'].get('regularMarketPrice', 15.0)
-                self.vix_data = {'current': float(vix_price)}
+            # Fetch VIX from Investing.com (Real market data)
+            if USE_REAL_VIX:
+                try:
+                    self.vix_data = VIX_FETCHER.fetch_current_vix()
+                    self.vix_interpretation = VIX_FETCHER.get_vix_interpretation(self.vix_data['current'])
+                except Exception as e:
+                    st.warning(f"Could not fetch real VIX, using fallback: {e}")
+                    self.vix_data = {'current': 15.0, 'change': 0.0, 'change_percent': 0.0,
+                                   'source': 'Fallback', 'status': 'error', 'timestamp': datetime.now().strftime("%H:%M:%S")}
+                    self.vix_interpretation = None
             else:
-                self.vix_data = {'current': 15.0}
+                # Fallback to Yahoo Finance
+                url_vix = "https://query1.finance.yahoo.com/v8/finance/chart/%5EINVIX"
+                response_vix = requests.get(url_vix, params={'interval': '1d', 'range': '5d'}, headers=headers, timeout=10)
+
+                if response_vix.status_code == 200:
+                    data_vix = response_vix.json()
+                    vix_price = data_vix['chart']['result'][0]['meta'].get('regularMarketPrice', 15.0)
+                    self.vix_data = {'current': float(vix_price), 'change': 0.0, 'change_percent': 0.0,
+                                   'source': 'Yahoo Finance', 'status': 'success', 'timestamp': datetime.now().strftime("%H:%M:%S")}
+                else:
+                    self.vix_data = {'current': 15.0, 'change': 0.0, 'change_percent': 0.0,
+                                   'source': 'Default', 'status': 'fallback', 'timestamp': datetime.now().strftime("%H:%M:%S")}
+                self.vix_interpretation = None
 
             return True
 
@@ -358,10 +381,52 @@ def main():
                 st.metric("📉 Low", f"₹{system.nifty_data['low']:,.2f}")
 
             with col4:
-                st.metric("⚡ VIX", f"{system.vix_data['current']:.2f}")
+                # Enhanced VIX display with change
+                vix_delta = f"{system.vix_data.get('change_percent', 0):+.2f}%" if 'change_percent' in system.vix_data else None
+                st.metric("⚡ VIX", f"{system.vix_data['current']:.2f}", vix_delta)
+
+                # Show VIX source (small text)
+                if 'source' in system.vix_data:
+                    source_icon = "✅" if system.vix_data.get('status') == 'success' else "⚠️"
+                    st.caption(f"{source_icon} {system.vix_data['source']}")
 
             with col5:
-                st.metric("🕐 Updated", system.nifty_data['timestamp'])
+                st.metric("🕐 Updated", system.vix_data.get('timestamp', system.nifty_data['timestamp']))
+
+        # VIX Interpretation Box
+        if system.vix_data and hasattr(system, 'vix_interpretation') and system.vix_interpretation:
+            st.markdown("---")
+
+            interp = system.vix_interpretation
+            vix_val = system.vix_data['current']
+
+            # Color-coded VIX interpretation
+            if vix_val < 12:
+                bg_color = "#d1fae5"  # light green
+                text_color = "#065f46"  # dark green
+            elif vix_val < 15:
+                bg_color = "#ecfccb"  # light lime
+                text_color = "#365314"  # dark lime
+            elif vix_val < 20:
+                bg_color = "#fef9c3"  # light yellow
+                text_color = "#713f12"  # dark yellow
+            elif vix_val < 30:
+                bg_color = "#fed7aa"  # light orange
+                text_color = "#7c2d12"  # dark orange
+            else:
+                bg_color = "#fecaca"  # light red
+                text_color = "#7f1d1d"  # dark red
+
+            st.markdown(f"""
+            <div style="background: {bg_color}; padding: 1rem; border-radius: 8px; border-left: 5px solid {text_color};">
+                <h4 style="color: {text_color}; margin: 0;">🎯 VIX Analysis: {interp['level']} Volatility</h4>
+                <p style="color: {text_color}; margin: 0.5rem 0;">
+                    <strong>Market Mood:</strong> {interp['market_mood']}<br>
+                    <strong>Recommended Strategy:</strong> {interp['strategy']}<br>
+                    <strong>Risk Level:</strong> {interp['risk']}
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown("---")
 
