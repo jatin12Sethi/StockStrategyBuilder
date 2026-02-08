@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+trading_env/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# Sensitive files
+*.log
+.telegram_settings.json
+*.key
+*.pem
+credentials.json
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+
+# Trade data (optional - keep if you want to backup)
+# trade_log.json
+# trade_history/
+
+# Parent directory files
+../.DS_Store
+../.cache/
+../.antigravity/
+../.anydesk/
+../.bash_history
+../.CFUserTextEncoding
+../.angular-config.json
